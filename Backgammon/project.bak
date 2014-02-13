@@ -1,0 +1,1177 @@
+#lang racket/gui
+(require htdp/draw)
+(require compatibility/mlist)
+; Make a 1000 x 800 frame
+(define frame (new frame% [label "Backgammon"]
+                   [width 1000]
+                   [height 1000]))
+
+(define end-frame (new frame% [label "Game Finished"]
+                   [width 400]
+                   [height 400]))
+
+(define play (new button%
+                  [label "Play Again"]
+                  [parent end-frame]
+                  [min-width 50]
+                  [min-height 50]
+                  [callback (lambda (button event)
+                              0)]))
+(define menu (new button%
+                  [label "Return To Menu"]
+                  [parent end-frame]
+                  [min-width 50]
+                  [min-height 50]
+                  [callback (lambda (button event)
+                              0)]))
+(define exit (new button%
+                  [label "Exit"]
+                  [parent end-frame]
+                  [min-width 50]
+                  [min-height 50]
+                  [callback (lambda (button event)
+                              0)]))
+(define double #f)
+
+(define menu-frame (new frame%
+                        [label "Backgammon"]
+                        [width 800]
+                        [height 800]))
+
+
+(define single (new button%
+                    [label "Single Player"]
+                    [parent menu-frame]
+                    [min-width 100]
+                    [min-height 50]
+                    [callback (lambda (button event)
+                                (begin (send menu-frame show #f)
+                                       (draw-pieces posn)
+                                       (send frame show #t)))]))
+
+(define double-p (new button%
+                    [label "Double Player"]
+                    [parent menu-frame]
+                    [min-width 100]
+                    [min-height 50]
+                    [callback (lambda (button event)
+                                (begin (send menu-frame show #f)
+                                       (draw-pieces posn)
+                                       (send frame show #t)
+                                        (set! double #t)))]))
+
+(define exit-b (new button%
+                    [label "Exit"]
+                    [parent menu-frame]
+                    [min-width 100]
+                    [min-height 50]
+                    [callback (lambda (button event)
+                                (send menu-frame show #f))]))
+
+; Derive a new canvas (a drawing window) class to handle events
+(define my-canvas%
+  (class canvas%
+    (init-field [first-move #f])
+    (init-field [second-move #f])
+    (init-field [third-move #f])
+    (init-field [fourth-move #f])
+    (init-field [fip 0])
+    (init-field [ffp 0])
+    (init-field [sip 0])
+    (init-field [sfp 0])
+    (init-field [dice1 0])
+    (init-field [dice2 0])
+    (init-field [sum 0])
+    (init-field [cut-move #f])
+    (init-field [cut-move2 #f])
+    
+    (init-field [piece? 'undefined])
+    
+    (define/public (show-sum) (list dice1 dice2)) 
+    (define/override (on-event event)
+      (begin 
+      
+             
+             (if (send event button-down? 'left)
+                 
+                 (cond [(finish-game) (call-win-canvas)]   ;; Calling the winning canvas if any of the player has won
+                       [(and (and (>= (send event get-x) 825) (<= (send event get-x) 965))   ;; Roll Dice condition
+                             (and (>= (send event get-y) 75) (<= (send event get-y) 225)))
+                        (begin (reset)
+                               
+                               (draw-dice dice)
+                               (send frame show #t)
+                               (set! dice1 (car dice))
+                               (set! dice2 (cadr dice))
+                               (set! sum (+ dice1 dice2))                               
+                               )
+                        ]
+                       [(and (and (>= (send event get-x) 820) (<= (send event get-x) 925))  ;; Player Blue cut-pieces condition
+                             (and (>= (send event get-y) 470) (<= (send event get-y) 500)))
+                        (begin (if (not (= cpieces-black 0)) 
+                               (begin
+                               (show-avail-moves 25)  
+                               (draw-dice dice)
+                               (send frame show #t)
+                               (set! cut-move #t)
+                               (set! first-move #t)
+                               (set! fip 25))
+                               
+                               (let ([x 0]) (set! x 0))))]
+                       [(and (and (>= (send event get-x) 820) (<= (send event get-x) 950))  ;; Player Yellow cut-pieces condition
+                             (and (>= (send event get-y) 675) (<= (send event get-y) 695))
+                             double)
+                        (begin (if (not (= cpieces-white 0)) 
+                               (begin
+                               (show-avail-moves 0)
+                               (draw-dice dice)
+                               (send frame show #t)
+                               (set! cut-move2 #t)
+                               (set! piece? 'white)
+                               (set! first-move #t)
+                               (set! fip 0))
+                               
+                               (let ([x 0]) (set! x 0))))]
+                       
+                       [(and (and (>= (send event get-x) 820) (<= (send event get-x) 950))  ;; Player Blue completed-pieces condition
+                             (and (>= (send event get-y) 520) (<= (send event get-y) 550)))
+                        (begin (let ([iposn (massoc fip posn)])
+                                 (if (= 1 (mcar (mcdr iposn)))
+                                     (begin (set-mcar! (mcdr iposn) 0)
+                                            (set-mcar! (mcdr (mcdr iposn)) 'undefined)
+                                            (set! pieces-black (+ 1 pieces-black)))
+                                     
+                                     (begin (set! pieces-black (+ 1 pieces-black))
+                                            (set-mcar! (mcdr iposn) (- (mcar (mcdr iposn)) 1)))))
+                               (set! second-move #t)
+                               (draw-pieces posn) 
+                               (draw-dice dice)
+                               (send frame show #t)
+                               
+                               
+                               )
+                        ]
+                       [(and (and (>= (send event get-x) 820) (<= (send event get-x) 950))  ;; Player Yellow completed-pieces condition
+                             (and (>= (send event get-y) 725) (<= (send event get-y) 745)))
+                        (begin (let ([iposn (massoc fip posn)])
+                                 (if (= 1 (mcar (mcdr iposn)))
+                                     (begin (set-mcar! (mcdr iposn) 0)
+                                            (set-mcar! (mcdr (mcdr iposn)) 'undefined)
+                                            (set! pieces-white (+ 1 pieces-white)))
+                                     
+                                     (begin (set! pieces-white (+ 1 pieces-white))
+                                            (set-mcar! (mcdr iposn) (- (mcar (mcdr iposn)) 1)))))
+                               (set! second-move #t)
+                               (draw-pieces posn) 
+                               (draw-dice dice)
+                               (send frame show #t)
+                               
+                               
+                               )
+                        ]
+                       
+                       [(and (and (>= (send event get-x) 0) (<= (send event get-x) 800))  ;; Avoiding stray clicks
+                             (and (>= (send event get-y) 50) (<= (send event get-y) 750)))
+                        (cond 
+                        
+                        
+                        
+                       [(not first-move) (begin 
+                                           (show-avail-moves (mouse-posn (send event get-x) (send event get-y)))
+                                           (set! fip (mouse-posn (send event get-x) (send event get-y)))
+                                           (set! first-move #t))]
+                       [(and first-move (not second-move)) (begin (set! ffp (mouse-posn (send event get-x) (send event get-y)))
+                                                                  (cond [ cut-move2 (begin (set! no  ffp)
+                                                                                      (set! nw  ffp) 
+                                                                                      (move-player2-cut-piece ffp)
+                                                                                      (set! cut-move2 #f)
+                                                                                      (set! cut-move #f)
+                                                                                      (set! second-move #t)
+                                                                                      (draw-dice dice)
+                                                                                      (send frame show #t))]
+                                                                      
+                                                                  
+                                                                   
+                                                                  
+                                                                  [ cut-move (begin (set! no  ffp)
+                                                                                      (set! nw  ffp) 
+                                                                                      (move-player-cut-piece ffp)
+                                                                                      (set! cut-move2 #f)
+                                                                                      (set! cut-move #f)
+                                                                                      (set! second-move #t)
+                                                                                      (draw-dice dice)
+                                                                                      (send frame show #t))]
+                                                                  [else (if (valid-move? ffp 
+                                                                                   (send main available-posn (massoc fip posn) (list dice1 dice2) posn))
+                                                                      (begin (player-move fip ffp)
+                                                                             (draw-dice dice)
+                                                                             (send frame show #t)
+                                                                             (set! second-move #t)
+                                                                             )
+                                                                      (begin (display "Invalid Move1")
+                                                                             (draw-pieces posn)
+                                                                             (draw-dice dice)
+                                                                             (send frame show #t)
+                                                                             (set! first-move #f)
+                                                                             (set! second-move #f)))])
+                                                                      
+                                                                  )]
+
+                       [(and first-move second-move (not third-move)) (begin 
+                                                                             (set! no  (- fip ffp))
+                                                                             (set! nw  (- ffp fip))
+                                                                             (show-avail-moves (mouse-posn (send event get-x) (send event get-y)))
+                                                                             (set! sip (mouse-posn (send event get-x) (send event get-y)))
+                                                                             (set! third-move #t))]
+                       [(and first-move second-move third-move (not fourth-move)) (begin (set! sfp (mouse-posn (send event get-x) (send event get-y)))
+                                                                                         (if cut-move (begin (move-player-cut-piece sfp)
+                                                                                                             (set! cut-move #f)
+                                                                                                             (set! fourth-move #t)
+                                                                                                             (draw-dice dice)
+                                                                                                             (send frame show #t)
+                                                                                                             (begin  (reset)
+                                                                                                                     (draw-dice dice)
+                                                                                                                     (if (= 0 cpieces-white) 
+                                                                                                                         (cpu-move)
+                                                                                                                         (move-cut-pieces dice))
+                                                                                                                     (draw-pieces posn)
+                                                                                                                     (draw-dice dice)
+                                                                                                                     (send frame show #t)
+                                                                                                                     (set! first-move #f)
+                                                                                                                     (set! second-move #f)
+                                                                                                                     (set! third-move #f)
+                                                                                                                     (set! no 0)
+                                                                                                                     (set! nw 0)))
+                                                                                             
+                                                                                         (if (valid-move? sfp 
+                                                                                                          (send main available-posn (massoc sip posn) (list dice1 dice2) posn))
+                                                                                             (begin  
+                                                                                                      (player-move sip sfp)
+                                                                                                      (send frame show #t)
+                                                                                                      (if double
+                                                                                                      (begin
+                                                                                                       (send frame show #t)
+                                                                                                       (set! first-move #f)
+                                                                                                      (set! second-move #f)
+                                                                                                      (set! third-move #f)
+                                                                                                      (set! no 0)
+                                                                                                      (set! nw 0))
+                                                                                                      (begin  (reset)
+                                                                                                      (draw-dice dice)
+                                                                                                      (if (= 0 cpieces-white) 
+                                                                                                      (cpu-move)
+                                                                                                      (move-cut-pieces dice))
+                                                                                                      (draw-pieces posn)
+                                                                                                      (draw-dice dice)
+                                                                                                      (send frame show #t)
+                                                                                                      (set! first-move #f)
+                                                                                                      (set! second-move #f)
+                                                                                                      (set! third-move #f)
+                                                                                                      (set! no 0)
+                                                                                                      (set! nw 0))))
+                                                                                             (begin (display "Invalid Move2")
+                                                                                                    (draw-pieces posn)
+                                                                                                    (draw-dice dice)
+                                                                                                    (send frame show #t)
+                                                                                                    (set! third-move #f)
+                                                                                                    (set! fourth-move #f)))))])])
+                                                                                             
+                                                                                         
+                                                                                       
+                 (let ([x 0]) (set! x 0))) 
+             (send msg set-label (string-append (number->string (send event get-x))"," (number->string (send event get-y))))))
+    
+    
+    ; Call the superclass init, passing on all init args
+    (super-new)))
+;Checks whether game has finished or not
+
+(define (finish-game)
+   (send bm-dc set-font (make-font #:size 25 #:family 'roman
+                             #:weight 'bold))
+        (cond [(= pieces-black 15) 
+              (begin (send frame show #f)
+                     (send bm-dc clear)
+                   (send bm-dc draw-text "PLAYER-BLUE WINS" 300 200)
+                   (send frame show #t)
+                   #t)]
+            
+             [(= pieces-white 15) (begin (send frame show #f)
+                     (send bm-dc clear)
+                   (send bm-dc draw-text "PLAYER-YELLOW WINS" 300 200)
+                   (send frame show #t)
+                   #t)]
+             [else #f]))
+
+; Moves the player cut-piece to the given position
+
+(define (move-player-cut-piece fp)
+  (define iposn (massoc fp posn))
+  
+       
+  (begin (if  (eq? (mcar (mcdr (mcdr iposn))) 'undefined)
+              (begin (set-mcar! (mcdr iposn) 1)
+                     (set-mcar! (mcdr (mcdr iposn)) 'black)
+                     (set! cpieces-black (- cpieces-black 1)))
+              
+              (if (and (= 1 (mcar (mcdr iposn))) (eq? (mcar (mcdr (mcdr iposn))) 'white)) 
+                  (begin 
+                    (set-mcar! (mcdr (mcdr iposn)) 'black)
+                    (set! cpieces-black (-  cpieces-black 1))
+                    (set! cpieces-white (+  cpieces-white 1)))
+                  
+                  (begin (set! cpieces-black (- cpieces-black 1))
+                         (set-mcar! (mcdr iposn) (+ (mcar (mcdr iposn)) 1)))))
+         (draw-pieces posn)
+         (draw-dice dice)
+         (send frame show #t))) 
+
+(define (move-player2-cut-piece fp)
+  (define iposn (massoc fp posn))
+  
+       
+  (begin (if  (eq? (mcar (mcdr (mcdr iposn))) 'undefined)
+              (begin (set-mcar! (mcdr iposn) 1)
+                     (set-mcar! (mcdr (mcdr iposn)) 'white)
+                     (set! cpieces-white (- cpieces-white 1)))
+              
+              (if (and (= 1 (mcar (mcdr iposn))) (eq? (mcar (mcdr (mcdr iposn))) 'black)) 
+                  (begin 
+                    (set-mcar! (mcdr (mcdr iposn)) 'white)
+                    (set! cpieces-black (+  cpieces-black 1))
+                    (set! cpieces-white (-  cpieces-white 1)))
+                  
+                  (begin (set! cpieces-white (- cpieces-white 1))
+                         (set-mcar! (mcdr iposn) (+ (mcar (mcdr iposn)) 1)))))
+         (draw-pieces posn)
+         (draw-dice dice)
+         (send frame show #t)))
+
+;Shows all available moves
+
+(define (show-avail-moves ip)
+   (cond [(and (or (= (- ip (car dice )) 0) (= (- ip (cadr dice)) 0))
+               (eq? (mcar (mcdr (mcdr (massoc ip posn)))) 'black))
+      (begin (cond [(= no 0) (send bm-dc draw-ellipse 820 520 130 30)]
+                   [(= no (car dice))
+                    (if (= (- ip (cadr dice)) 0)
+                        (send bm-dc draw-ellipse 820 520 130 30)
+                        (send frame show #t))]
+                   [(= no (cadr dice))
+                    (if (= (- ip (car dice)) 0)
+                        (send bm-dc draw-ellipse 820 520 130 30)
+                        (send frame show #t))]
+                   )
+;     (if  (= ip 25)
+;        (begin (draw-pieces posn)
+;               (draw-dice dice)
+;               (send frame show #t)
+;       (draw-available (remove no 
+;                                  (append (send main checkb-posn (- 25 (car dice)) posn) (send main checkb-posn (- 25 (cadr dice)) posn)))))
+        (if (eq? (mcar (mcdr (mcdr (massoc ip posn)))) 'black)
+      (cond [(= no 0)
+             (draw-available (send main available-posn (massoc ip posn) dice posn))]
+       [(null? (send main available-posn (massoc ip posn) dice posn)) (send frame show #t)]
+        [else   
+                 (draw-available (if (= (car dice) no)
+                          (drop (send main available-posn (massoc ip posn) dice posn) 1)
+                          (take (send main available-posn (massoc ip posn) dice posn) 1)))])
+      (cond [(= nw 0)
+        (draw-available-w (send main available-posn (massoc ip posn) dice posn))]
+       [(null? (send main available-posn (massoc ip posn) dice posn)) (send frame show #t)]
+        [else (draw-available-w (if (= (car dice) nw)
+                          (drop (send main available-posn (massoc ip posn) dice posn) 1)
+                          (take (send main available-posn (massoc ip posn) dice posn) 1)))])))]
+         [(and (or (= (+ ip (car dice )) 25) (= (+ ip (cadr dice)) 25))
+               (eq? (mcar (mcdr (mcdr (massoc ip posn)))) 'white))
+          (begin (cond [(= no 0) (send bm-dc draw-ellipse 820 725 130 30)]
+                   [(= no (car dice))
+                    (if (= (+ ip (cadr dice)) 25)
+                        (send bm-dc draw-ellipse 820 725 130 30)
+                        (send frame show #t))]
+                   [(= no (cadr dice))
+                    (if (= (+ ip (car dice)) 25)
+                        (send bm-dc draw-ellipse 820 725 130 30)
+                        (send frame show #t))]
+                   )
+;     (if  (= ip 25)
+;        (begin (draw-pieces posn)
+;               (draw-dice dice)
+;               (send frame show #t)
+;       (draw-available (remove no 
+;                                  (append (send main checkb-posn (- 25 (car dice)) posn) (send main checkb-posn (- 25 (cadr dice)) posn)))))
+        (if (eq? (mcar (mcdr (mcdr (massoc ip posn)))) 'black)
+      (cond [(= no 0)
+             (draw-available (send main available-posn (massoc ip posn) dice posn))]
+       [(null? (send main available-posn (massoc ip posn) dice posn)) (send frame show #t)]
+        [else   
+                 (draw-available (if (= (car dice) no)
+                          (drop (send main available-posn (massoc ip posn) dice posn) 1)
+                          (take (send main available-posn (massoc ip posn) dice posn) 1)))])
+      (cond [(= nw 0)
+        (draw-available-w (send main available-posn (massoc ip posn) dice posn))]
+       [(null? (send main available-posn (massoc ip posn) dice posn)) (send frame show #t)]
+        [else (draw-available-w (if (= (car dice) nw)
+                          (drop (send main available-posn (massoc ip posn) dice posn) 1)
+                          (take (send main available-posn (massoc ip posn) dice posn) 1)))])))]
+         
+   
+  [else (cond  [(= ip 25)
+       (begin  (draw-pieces posn)
+               (draw-dice dice)
+               (send frame show #t)
+               
+               (draw-available (remove no (append (send main checkb-posn (- 25 (car dice)) posn) (send main checkb-posn (- 25 (cadr dice)) posn)))))]
+         [(= ip 0)
+          (begin  (draw-pieces posn)
+               (draw-dice dice)
+               (send frame show #t)
+               
+               (draw-available (remove no (append (send main checkwh-posn (car dice) posn) (send main checkwh-posn (cadr dice) posn)))))]
+         
+   
+   [else (if (eq? (mcar (mcdr (mcdr (massoc ip posn)))) 'black)
+      (cond [(= no 0)
+        (draw-available (send main available-posn (massoc ip posn) dice posn))]
+       [(null? (send main available-posn (massoc ip posn) dice posn)) (send frame show #t)]
+        [else   (draw-available (if (= (car dice) no)
+                          (drop (send main available-posn (massoc ip posn) dice posn) 1)
+                          (take (send main available-posn (massoc ip posn) dice posn) 1)))])
+      (cond [(= nw 0)
+        (draw-available-w (send main available-posn (massoc ip posn) dice posn))]
+       [(null? (send main available-posn (massoc ip posn) dice posn)) (send frame show #t)]
+        [else (draw-available-w (if (= (car dice) nw)
+                          (drop (send main available-posn (massoc ip posn) dice posn) 1)
+                          (take (send main available-posn (massoc ip posn) dice posn) 1)))]))])]))
+      
+;Shows the winner canvas
+
+(define (call-win-canvas) (let ([x 0]) (set! x 0)))
+
+;Moves the player from ip to fp
+
+(define (player-move ip fp) (begin (move ip fp posn)
+                                   (draw-pieces posn)
+                                   (send frame show #t)))
+
+;Automatically the dice rolls for cpu
+
+(define (throw-dice) (roll-dice))
+
+;Show the dice on canvas
+
+(define (show-dice dicelist) 0)
+
+; Moves the cpu
+(define sum-dice 0)
+(define (cpu-move)
+  (define pos1 (massoc (- 25 (car dice)) posn))
+  (define pos2 (massoc (- 25 (cadr dice)) posn))
+   
+  (begin (set! sum-dice (+ (car dice) (cadr dice))) 
+    (cond [(eq? (mlist-ref pos1 2) 'white) (begin (set! pieces-white (+ 1 pieces-white))
+                                                       (set! sum-dice (- sum-dice (car dice)))
+                                                       (set-mcar! (mcdr pos1) (- (mcar (mcdr pos1)) 1))
+                                                       (ai-move))]
+               [(eq? (mlist-ref pos2 2) 'white) (begin (set! pieces-white (+ 1 pieces-white))
+                                                       (set! sum-dice (- sum-dice (cadr dice)))
+                                                       (set-mcar! (mcdr pos2) (- (mcar (mcdr pos2)) 1))
+                                                       (ai-move))]
+               [else (ai-move)])
+  
+          (draw-pieces posn)
+          (send frame show #t)))
+
+
+; Make a static text message in the frame
+(define msg (new message% [parent frame]
+                 [label "No events so far..."]))
+
+
+
+; Make the drawing area with a paint callback
+(define my-canvas
+  (new my-canvas% [parent frame]
+       [paint-callback
+        (lambda (canvas dc) (paint dc))]))
+
+
+; Get positon of backgammon die selected
+
+(define (mouse-posn x y)
+           
+         (if (<= y 400) (mup-pos x y) (mdn-pos x y)))
+     
+
+(define (mdn-pos x y)
+  (cond [(and (< x 800) (>= x 730)) 1]
+        [(and (< x 730) (>= x 665)) 2]
+        [(and (< x 665) (>= x 600)) 3]
+        [(and (< x 600) (>= x 535)) 4]
+        [(and (< x 535) (>= x 470)) 5]
+        [(and (< x 470) (>= x 405)) 6]
+        [(and (< x 405) (>= x 335)) 7]
+        [(and (< x 335) (>= x 270)) 8]
+        [(and (< x 270) (>= x 205)) 9]
+        [(and (< x 205) (>= x 140)) 10]
+        [(and (< x 140) (>= x 75)) 11]
+        [(and (< x 75) (>= x 0)) 12]))
+
+(define (mup-pos x y)
+  (cond [(and (< x 800) (>= x 730)) 24]
+        [(and (< x 730) (>= x 665)) 23]
+        [(and (< x 665) (>= x 600)) 22]
+        [(and (< x 600) (>= x 535)) 21]
+        [(and (< x 535) (>= x 470)) 20]
+        [(and (< x 470) (>= x 405)) 19]
+        [(and (< x 405) (>= x 335)) 18]
+        [(and (< x 335) (>= x 270)) 17]
+        [(and (< x 270) (>= x 205)) 16]
+        [(and (< x 205) (>= x 140)) 15]
+        [(and (< x 140) (>= x 75)) 14]
+        [(and (< x 75) (>= x 0)) 13]))
+
+; ... pens, brushes, and draw-face are the same as above ...
+
+(define (paint dc) (send dc draw-bitmap face-bitmap 0 0))
+
+; ... pens, brushes, and draw-face are the same as above ...
+
+; Create a 800 x 800 bitmap
+(define face-bitmap (make-object bitmap% 1000 1000))
+; Create a drawing context for the bitmap
+(define bm-dc (make-object bitmap-dc% face-bitmap))
+; A bitmap's initial content is undefined; clear it before drawing
+(send bm-dc clear)
+
+
+;;variables for images
+(define one (read-bitmap "one.jpg"))
+(define two (read-bitmap "two.jpg"))
+(define three (read-bitmap "three.jpg"))
+(define four (read-bitmap "four.jpg"))
+(define five (read-bitmap "five.jpg"))
+(define six (read-bitmap "six.jpg"))
+(define rdice (read-bitmap "roll.jpg"))
+
+(define (roll-pos n)
+        (cond [(= n 1) one]
+              [(= n 2) two]
+              [(= n 3) three]
+              [(= n 4) four]
+              [(= n 5) five]
+              [(= n 6) six]
+              [else 0]))
+
+(define (draw-dice li)
+        (begin (send bm-dc draw-bitmap (roll-pos (car li)) 815 275)
+               (send bm-dc draw-bitmap (roll-pos (car (cdr li))) 900 275)))
+
+(define black-pen (make-object pen% "BLACK" 3 'solid))
+(define brown-pen (make-object pen% "BROWN" 3 'solid))
+(define blue-pen (make-object pen% "BLUE" 8 'solid))
+(define no-brush (make-object brush% "BLACK" 'transparent))
+(define brown-brush (make-object brush% "BROWN" 'solid))
+(define blue-brush (make-object brush% "BLUE"  'solid))
+(define yellow-brush (make-object brush% "YELLOW" 'solid))
+(define red-pen (make-object pen% "RED" 2 'solid))  
+
+
+(define  (l-tringle x)   
+  (send bm-dc set-pen brown-pen)
+  (send bm-dc draw-line x 50 (+ x 30) 300)
+  (send bm-dc draw-line (+ x 30) 300 (+ x 60) 50))
+
+(define  (u-tringle x)      
+  (send bm-dc set-pen brown-pen)
+  (send bm-dc draw-line x 750 (+ x 30) 500)
+  (send bm-dc draw-line (+ x 30) 500 (+ x 60) 750))
+
+(define no 0)
+(define nw 0)
+
+(define (draw-available li)
+       (cond [(null? li) (send frame show #t)]            
+             [ (begin (draw-avail (car li) (+ 1 (mcar (mcdr (massoc (car li) posn))))) (draw-available (cdr li)) )]))
+
+(define (draw-available-w li)
+       (cond [(null? li) (send frame show #t)]            
+             [ (begin (draw-avail-w (car li) (+ 1 (mcar (mcdr (massoc (car li) posn))))) (draw-available-w (cdr li)) )]))
+
+(define (draw-avail x n)
+  (cond [(= n 0) (let ([x 0]) (set! x 0))]
+        [(> x 18) (begin  (send bm-dc set-brush brown-brush)
+                          (send bm-dc draw-ellipse (- ( *(- x 12) 65) 50) (* 50 n) 60 50)
+                          (draw-black x (- n 1)))]
+        [(> x 12) (begin  (send bm-dc set-brush brown-brush)
+                          (send bm-dc draw-ellipse (- (* (- x 12) 65) 55) (* 50 n) 60 50)
+                          (draw-black x (- n 1)))]
+        [(> x 6) (begin  (send bm-dc set-brush brown-brush)
+                         (send bm-dc draw-ellipse (- 800 (+ (* x 65) 10) ) (- 750 (* 50  n )) 60 50)
+                         (draw-black x (- n 1)))]
+        [else (begin  (send bm-dc set-brush brown-brush)
+                      (send bm-dc draw-ellipse (- 800 (+ (* x 65) 5))  (- 750 (* 50 n)) 60 50)
+                      (draw-black x (- n 1)))]))
+
+(define (draw-avail-w x n)
+  (cond [(= n 0) (let ([x 0]) (set! x 0))]
+        [(> x 18) (begin  (send bm-dc set-brush brown-brush)
+                          (send bm-dc draw-ellipse (- ( *(- x 12) 65) 50) (* 50 n) 60 50)
+                          (draw-white x (- n 1)))]
+        [(> x 12) (begin  (send bm-dc set-brush brown-brush)
+                          (send bm-dc draw-ellipse (- (* (- x 12) 65) 55) (* 50 n) 60 50)
+                          (draw-white x (- n 1)))]
+        [(> x 6) (begin  (send bm-dc set-brush brown-brush)
+                         (send bm-dc draw-ellipse (- 800 (+ (* x 65) 10) ) (- 750 (* 50  n )) 60 50)
+                         (draw-white x (- n 1)))]
+        [else (begin  (send bm-dc set-brush brown-brush)
+                      (send bm-dc draw-ellipse (- 800 (+ (* x 65) 5))  (- 750 (* 50 n)) 60 50)
+                      (draw-white x (- n 1)))]))
+
+(define (draw-white x n)
+  (cond [(= n 0) (let ([x 0]) (set! x 0))]
+        [(> x 18) (begin  (send bm-dc set-brush yellow-brush)
+                          (send bm-dc draw-ellipse (- ( *(- x 12) 65) 50) (* 50 n) 60 50)
+                          (draw-white x (- n 1)))]
+        [(> x 12) (begin  (send bm-dc set-brush yellow-brush)
+                          (send bm-dc draw-ellipse (- (* (- x 12) 65) 55) (* 50 n) 60 50)
+                          (draw-white x (- n 1)))]
+        [(> x 6) (begin  (send bm-dc set-brush yellow-brush)
+                         (send bm-dc draw-ellipse (- 800 (+ (* x 65) 10) ) (- 750 (* 50  n )) 60 50)
+                         (draw-white x (- n 1)))]
+        [else (begin  (send bm-dc set-brush yellow-brush)
+                      (send bm-dc draw-ellipse (- 800 (+ (* x 65) 5))  (- 750 (* 50 n)) 60 50)
+                      (draw-white x (- n 1)))]))
+
+(define (draw-black x n)
+  (cond [(= n 0) (let ([x 0]) (set! x 0))]
+        [(> x 18) (begin  (send bm-dc set-brush blue-brush)
+                          (send bm-dc draw-ellipse (- ( *(- x 12) 65) 50) (* 50 n) 60 50)
+                          (draw-black x (- n 1)))]
+        [(> x 12) (begin  (send bm-dc set-brush blue-brush)
+                          (send bm-dc draw-ellipse (- (* (- x 12) 65) 55) (* 50 n) 60 50)
+                          (draw-black x (- n 1)))]
+        [(> x 6) (begin  (send bm-dc set-brush blue-brush)
+                         (send bm-dc draw-ellipse (- 800 (+ (* x 65) 10) ) (- 750 (* 50  n )) 60 50)
+                         (draw-black x (- n 1)))]
+        [else (begin  (send bm-dc set-brush blue-brush)
+                      (send bm-dc draw-ellipse (- 800 (+ (* x 65) 5))  (- 750 (* 50 n)) 60 50)
+                      (draw-black x (- n 1)))]))
+
+(define t #f)
+
+(define (draw-pieces li) 
+  (define (draw-pieces-h li)
+    (cond [(null? li) (let ([x 0]) (set! x 0))]
+          [(eq? (mcar (mcdr (mcdr (mcar li)))) 'undefined) (draw-pieces-h (mcdr li))]
+          [(eq? (mcar (mcdr (mcdr (mcar li)))) 'white) (begin (draw-white (mcar (mcar li)) (mcar (mcdr (mcar li)))) (draw-pieces-h (mcdr li)))]
+          [(eq? (mcar (mcdr (mcdr (mcar li)))) 'black) (begin (draw-black (mcar (mcar li)) (mcar (mcdr (mcar li)))) (draw-pieces-h (mcdr li)))]))
+  (begin (send bm-dc clear)
+         ;(if t (draw-dice (roll-dice))
+          ;     (let ([x 0]) (set! x 0)))
+         ; (define cover (read-bitmap "Background.jpg"))
+         ; (send bm-dc draw-bitmap cover 0 0)
+         (send bm-dc set-font (make-font #:size 11 #:family 'roman
+                             #:weight 'bold))
+         (define rdice (read-bitmap "roll.jpg"))
+         (send bm-dc draw-text "Player-Blue" 810 425)
+         (send bm-dc draw-text "Player-Yellow" 810 625)
+         (send bm-dc draw-text "Cut-pieces" 825 475)
+         (send bm-dc draw-text "Completed-pieces"  825 525)
+         (send bm-dc draw-text "Cut-pieces" 825 675)
+         (send bm-dc draw-text "Completed-pieces" 825 725)
+         (send bm-dc draw-text (number->string cpieces-black) 910 475)
+         (send bm-dc draw-text (number->string pieces-black)  960 525)
+         (send bm-dc draw-text (number->string cpieces-white) 910 675)
+         (send bm-dc draw-text (number->string pieces-white) 960 725)
+         (send bm-dc draw-bitmap rdice 825 75)
+         (send bm-dc set-pen blue-pen)
+         (send bm-dc draw-line 0 50 1000 50)
+         (send bm-dc draw-line 0 750 1000 750)
+         (send bm-dc draw-line 400 50 400 750)
+         (send bm-dc draw-line 0 400 800 400)
+         (send bm-dc draw-line 800 50 800 750)
+         (send bm-dc draw-line 1000 50 1000 750)
+         (l-tringle 10)
+         (l-tringle 75)
+         (l-tringle 140)
+         (l-tringle 205)
+         (l-tringle 270)
+         (l-tringle 335)
+         
+         (l-tringle 405)
+         (l-tringle 470)
+         (l-tringle 535)
+         (l-tringle 600)
+         (l-tringle 665)
+         (l-tringle 730)
+         
+         
+         (u-tringle 10)
+         (u-tringle 75)
+         (u-tringle 140)
+         (u-tringle 205)
+         (u-tringle 270)
+         (u-tringle 335)
+         
+         (u-tringle 405)
+         (u-tringle 470)
+         (u-tringle 535)
+         (u-tringle 600)
+         (u-tringle 665)
+         (u-tringle 730)
+         
+         (draw-pieces-h li)))
+
+
+;; Function for finding the no. of cut-pieces and predicting a move for it
+
+(define (move-cut-pieces dicelist)
+  
+  (define pos1 (massoc (car dicelist) posn))
+  (define pos2 (massoc (cadr dicelist) posn))
+  
+  (begin (cond [(not (= cpieces-white 0)) 
+                (cond [(eq? (mlist-ref pos1 2) 'white) (begin (set-mcar! (mcdr pos1) (+ (mcar (mcdr pos1)) 1))
+                                                              (set! cpieces-white (- cpieces-white 1)))]
+                      [(eq? (mlist-ref pos1 2) 'undefined) (begin (set-mcar! (mcdr pos1) (+ (mcar (mcdr pos1)) 1))
+                                                                  (set! cpieces-white (- cpieces-white 1))
+                                                                  (set-mcar! (mcdr (mcdr pos1)) 'white))]
+                      [(and (eq? (mlist-ref pos1 2) 'black)
+                            (= 1 (mlist-ref pos1 1))) (begin 
+                                                                  (set! cpieces-white (- cpieces-white 1))
+                                                                  (set-mcar! (mcdr (mcdr pos1)) 'white))])])
+         
+         (cond [(not (= cpieces-white 0)) 
+                
+                (cond [(eq? (mlist-ref pos2 2) 'white) (begin (set-mcar! (mcdr pos2) (+ (mcar (mcdr pos2)) 1))
+                                                              (set! cpieces-white (- cpieces-white 1)))]
+                      [(eq? (mlist-ref pos2 2) 'undefined) (begin (set-mcar! (mcdr pos2) (+ (mcar (mcdr pos2)) 1))
+                                                                  (set! cpieces-white (- cpieces-white 1))
+                                                                  (set-mcar! (mcdr (mcdr pos2)) 'white))]
+                      [(and (eq? (mlist-ref pos1 2) 'black)
+                            (= 1 (mlist-ref pos1 1))) (begin 
+                                                                  (set! cpieces-white (- cpieces-white 1))
+                                                                  (set-mcar! (mcdr (mcdr pos1)) 'white))])])))
+
+
+
+;Function for copying mlist
+(define (list-copy ls)
+  (if (null? ls)
+      '()
+      (cons (car ls) (list-copy (cdr ls)))))
+
+(define (mlist-copy ls)
+  (if (null? ls)
+      '()
+      (mcons (mcar ls) (mlist-copy (mcdr ls)))))
+
+;posn (#positon of board piece  #no.of pieces #which player's piece)
+(define posn
+  (mlist 
+   (mlist 1 2 'white)
+   (mlist 2 0 'undefined)
+   (mlist 3 0 'undefined)
+   (mlist 4 0 'undefined)
+   (mlist 5 0 'undefined)
+   (mlist 6 5 'black)
+   (mlist 7 0 'undefined)
+   (mlist 8 3 'black)
+   (mlist 9 0 'undefined)
+   (mlist 10 0 'undefined)
+   (mlist 11 0 'undefined)
+   (mlist 12 5 'white)
+   (mlist 13 5 'black)
+   (mlist 14 0 'undefined)
+   (mlist 15 0 'undefined)
+   (mlist 16 0 'undefined)
+   (mlist 17 3 'white)
+   (mlist 18 0 'undefined)
+   (mlist 19 5 'white)
+   (mlist 20 0 'undefined)
+   (mlist 21 0 'undefined)
+   (mlist 22 0 'undefined)
+   (mlist 23 0 'undefined)
+   (mlist 24 2 'black)))
+
+;; Pieces of players
+
+(define pieces-black 0)
+(define pieces-white 0)
+(define cpieces-black 0)
+(define cpieces-white 0)
+
+;; Define valid move which checks if the final position is available for the list of available moves
+
+(define (valid-move? fp li)
+  (define (help list)
+    (cond[(null? list) #f]
+         [(= (car list) fp) #t]
+         [else (help (cdr list))]))
+  (help li))
+
+
+;;Roll the dices
+
+(define (roll-dice)
+  (list (+ (random 6) 1)
+         (+ (random 6) 1)))
+
+(define dice (roll-dice))
+
+(define (reset)
+     (set! dice (roll-dice)))
+
+;; Get the score of each Black and White
+
+(define position%
+  (class object%
+    (init-field [cpieces-blackx 0])
+    (init-field [cpieces-whitex 0])
+    (init-field [cpieces-whitey 0])
+    (init-field [cpieces-blacky 0])
+    (super-new)
+    
+    ;; Send all init-field
+    
+    (define/public (pie) (list pieces-black cpieces-black pieces-white cpieces-white)) 
+    
+    (define/public (resetx) (set! cpieces-blackx 0))
+    (define/public (resety) (set! cpieces-blacky 0))
+    
+    ;; Check all cut pieces
+    
+    (define/public (pieces-completed x)
+      (cond[(eq? x 'black) pieces-black]
+           [(eq? x 'white) pieces-white]))
+    
+    
+    ;; Check all completed pieces
+    
+    (define/public (pieces-in-hand x)
+      (cond[(eq? x 'black) cpieces-black]
+           [(eq? x 'white) cpieces-white]))     
+    
+    
+    
+    (define/public (get-score li)
+      (define score-black 0)
+      (define score-white 0)
+      (define (get-score-helper li)
+        
+        (cond  [(null?  li) (list (+ (* cpieces-blacky 25) (* cpieces-blackx 25) score-black) (+ (* cpieces-whitex 25) (* cpieces-whitey 25) score-white))] 
+               [(equal? (mcar (mcdr (mcdr (mcar li)))) 'black) (begin (set! score-black (+ score-black (* (mcar (mcar li)) (mcar (mcdr (mcar li))))))
+                                                                      (get-score-helper (mcdr li)))]
+               [(equal? (mcar (mcdr (mcdr (mcar li)))) 'white) (begin (set! score-white (+ score-white  (* (- 25 (mcar (mcar li))) (mcar (mcdr (mcar li))))))
+                                                                      (get-score-helper (mcdr li)))]
+               [(equal? (mcar (mcdr (mcdr (mcar li)))) 'undefined) (get-score-helper (mcdr li))]))
+      (get-score-helper li))
+    ;; Check all available posn by giving it a list of 1 position
+    
+    
+    (define/public (available-posn li dicelist lst)
+      (let ((pos (mcar li)))
+        (define (checkw-posn n lst)
+          
+          (cond [(>= n 25) '()]
+                [(< (- n 1) 0 ) '()]
+                [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'white) (list n)]
+                [(and (equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'black) (= (mcar (mcdr (mlist-ref lst (- n 1)))) 1)) (list n)]
+                [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'undefined) (list n)]
+                [else '()]))
+        
+        (cond [(equal? (mcar (mcdr (mcdr li))) 'black)
+               (append (checkb-posn (-  pos (car dicelist)) lst)
+                       (checkb-posn (- pos (car (cdr dicelist))) lst) 
+                       ;(checkb-posn (- pos (+ (mcar (mcdr dicelist)) (mcar dicelist))) lst)
+                       )]
+              [(equal? (mcar (mcdr (mcdr li))) 'white)
+               (append (checkw-posn (+ (car dicelist) pos) lst)
+                       (checkw-posn (+ (car (cdr dicelist)) pos) lst)
+                       ;(checkw-posn (+ (+ (mcar (mcdr dicelist)) (mcar dicelist)) pos) lst)
+                       )]
+              [else '()])))
+    
+    
+    (define/public  (checkw-posn n x lst)
+      (cond  [(>= (+ n x) 25) '()]
+             [(< (- (+ n x) 1) 0) '()]
+             [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- (+ n x ) 1))))) 'white) (list n)]
+             [(and (equal? (mcar (mcdr (mcdr (mlist-ref lst (- (+ n x ) 1))))) 'black) (= (mcar (mcdr (mlist-ref lst (- (+ n x) 1)))) 1)) (list n)]
+             [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- (+ n x) 1))))) 'undefined) (list n)]
+             [else '()]))
+    
+    (define/public (checkb-posn n lst)
+          
+          (cond [(>= n 25) '()]
+                [(< (- n 1) 0 ) '()]
+                [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'black) (list n)]
+                [(and (equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'white) (= (mcar (mcdr (mlist-ref lst (- n 1)))) 1)) (list n)]
+                [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'undefined) (list n)]
+                [else '()]))
+    
+    (define/public (checkwh-posn n lst)
+          
+          (cond [(>= n 25) '()]
+                [(< (- n 1) 0 ) '()]
+                [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'white) (list n)]
+                [(and (equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'black) (= (mcar (mcdr (mlist-ref lst (- n 1)))) 1)) (list n)]
+                [(equal? (mcar (mcdr (mcdr (mlist-ref lst (- n 1))))) 'undefined) (list n)]
+                [else '()]))    
+    
+    
+    (define/public (get-posn li x)
+      (define (get-posn-h li n acc)
+        (cond [(= (+ n x) 25) acc]
+              [else (if (eq? (mcar (mcdr (mcdr (mlist-ref li (- n 1))))) 'white)
+                        (get-posn-h li (+ n 1) (append acc (checkw-posn n x li)))
+                        (get-posn-h li (+ n 1) acc))
+                    ]))
+      (get-posn-h li 1 '())) 
+    
+    
+    
+    ;; Moves a die from ip to fp permanently
+    
+    (define/public (movex ip fp li)
+      (let (
+            [il (mcdr (massoc ip li))]
+            [fl (mcdr (massoc (+ fp ip) li))]
+            [ic (mcar (mcdr (mcdr (massoc ip li))))]
+            [fc (mcar (mcdr (mcdr (massoc (+ ip fp) li))))]
+            [fc2 (mcdr (mcdr (mlist-ref li (- (+ fp ip) 1))))]
+            [ic2 (mcdr (mcdr (mlist-ref li (- ip 1))))]
+            )
+        
+        (cond [(or (null? ip) (null? fp) (null? li)) (let ([x 0]) (set! x 0))]
+              [ (or (eq? fc 'undefined) (eq? fc ic)) (begin (if (eq? ic 'undefined)
+                                                                (let ([x 0]) (set! x 0))
+                                                                (begin (set-mcar! il (- (mcar il) 1))
+                                                                       (set-mcar! fl (+ (mcar fl) 1))))
+                                                            
+                                                            (if (eq? fc 'undefined)
+                                                                (if (eq? ic 'white) (set-mcar! fc2 'white)
+                                                                    (set-mcar! fc2 'black))
+                                                                (let ([x 0]) (set! x 0)))
+                                                            
+                                                            (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                                                            li)
+                                                     ]
+              [else (begin (set-mcar! il (- (mcar il) 1))
+                           (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                               (let ([x 0]) (set! x 0)))
+                           
+                           (if (eq? fc 'white)
+                               (if  (= (mcar fl ) 1)
+                                    (begin (set! cpieces-whitex (+ 1 cpieces-whitex))
+                                           (set-mcar! fl  1)
+                                           (set-mcar! fc2 'black))                                    
+                                    (set-mcar! il (+ (mcar il) 1)))
+                               
+                               (if  (= (mcar fl ) 1)
+                                    (begin (set! cpieces-blackx (+ 1 cpieces-blackx))
+                                           (set-mcar! fl  1)
+                                           (set-mcar! fc2 'white))
+                                    (set-mcar! il (+ (mcar il) 1))))
+                               (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                                   (let ([x 0]) (set! x 0)))
+                               (if (= (mcar fl) 0) (set-mcar! fc2 'undefined)
+                                   (let ([x 0]) (set! x 0))) li)
+                                ])))
+    
+    (define/public (movey ip fp li)
+      (let (
+            [il (mcdr (massoc ip li))]
+            [fl (mcdr (massoc (+ fp ip) li))]
+            [ic (mcar (mcdr (mcdr (massoc ip li))))]
+            [fc (mcar (mcdr (mcdr (massoc (+ ip fp) li))))]
+            [fc2 (mcdr (mcdr (mlist-ref li (- (+ fp ip) 1))))]
+            [ic2 (mcdr (mcdr (mlist-ref li (- ip 1))))]
+            )
+        
+        (cond [(or (null? ip) (null? fp) (null? li)) (let ([x 0]) (set! x 0))]
+              [ (or (eq? fc 'undefined) (eq? fc ic)) (begin (if (eq? ic 'undefined)
+                                                                (let ([x 0]) (set! x 0))
+                                                                (begin (set-mcar! il (- (mcar il) 1))
+                                                                       (set-mcar! fl (+ (mcar fl) 1))))
+                                                            
+                                                            (if (eq? fc 'undefined)
+                                                                (if (eq? ic 'white) (set-mcar! fc2 'white)
+                                                                    (set-mcar! fc2 'black))
+                                                                (let ([x 0]) (set! x 0)))
+                                                            
+                                                            (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                                                            (if (= (mcar fl) 0) (set-mcar! fc2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                                                            li)
+                                                     ]
+              [else (begin (set-mcar! il (- (mcar il) 1))
+                           (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                               (let ([x 0]) (set! x 0)))
+                           
+                           (if (eq? fc 'white)
+                               (if  (= (mcar fl ) 1)
+                                    (begin (set! cpieces-whitey (+ 1 cpieces-whitey))
+                                           (set-mcar! fl  1)
+                                           (set-mcar! fc2 'black))                                    
+                                    (set-mcar! il (+ (mcar il) 1)))
+                               
+                               (if  (= (mcar fl ) 1)
+                                    (begin (set! cpieces-blacky (+ 1 cpieces-blacky))
+                                           (set-mcar! fl  1)
+                                           (set-mcar! fc2 'white))
+                                    (set-mcar! il (+ (mcar il) 1))))
+                               (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                               (if (= (mcar fl) 0) (set-mcar! fc2 'undefined)
+                                   (let ([x 0]) (set! x 0)))
+                               li )])))
+    
+    
+    ))
+
+;;Single Player logic for Backgammon
+
+;; (aii) returns all possible combinations of moves of position for a pair of dice
+(define (aii)
+  (define b1 (map mlist->list (mlist->list posn)))
+  (let ([bi (list->mlist (map list->mlist b1))])
+    (get-listx (send main get-posn bi (car dice)) bi)))
+
+
+(define (get-listx lix po)
+  (define b2 (map mlist->list (mlist->list po)))
+  (define (help lix acc)
+    (cond [(null? lix) acc]
+          [else (begin (send main resetx)
+                       (let* ([copy1 (list->mlist (map list->mlist b2))]
+                              [ml (send main movex (car lix) (car dice) copy1)])
+                         (help (cdr lix) (append acc 
+                                                 (list 
+                                                  (list (get-listy 
+                                                         (send main get-posn 
+                                                               ml 
+                                                               (cadr dice)) 
+                                                         ml)
+                                                        
+                                                        (car lix) 
+                                                        (+ (car lix) (car dice)) 
+                                                        ))))))]))
+  (help lix '()))
+
+(define (get-listy liy ps)
+  (define b3 (map mlist->list (mlist->list ps)))
+  (define (help liy acc)
+    (cond [(null? liy) acc]
+          [else (begin (send main resety)    
+                       (let* ([copy2 (list->mlist (map list->mlist b3))]
+                              [scores (send main get-score (send main movey (car liy) (cadr dice) copy2))]
+                              [mod (- (car scores) (cadr scores))]
+                              )
+                         (help (cdr liy) 
+                               (append acc 
+                                       (list 
+                                        (list mod (car liy) (+ (car liy) (cadr dice))))))))]))
+  (help liy '()))
+
+
+;; (best-move) selects the best possible move among all moves taken from (aii)
+
+(define (best-move)
+  (define  bmoves (map (lambda (x) (mysortx x)) (aii)))
+  (define (help acc l)
+    
+    (cond [(null? l) acc]
+          [else (if (>= (caar l) (car acc)) (help (list (list-ref (car l) 0) 
+                                                       (list-ref (car l) 1) 
+                                                       (list-ref (car l) 2)
+                                                       (list-ref (car l) 3)
+                                                       (list-ref (car l) 4)) (cdr l))
+                    (help acc (cdr l)))]))
+  (help (list -600 0 0 0 0) bmoves))
+  
+  
+
+(define (mysorty li)
+  (define (help acc l)
+    (cond [(null? l) acc]
+          [else (if (>= (caar l) (car acc)) (help (list (caar l) (cadar l) (caddar l)) (cdr l))
+                    (help acc (cdr l)))]))
+  (help (list -600 0 0) li))
+
+(define (mysortx li)
+  (append (mysorty (car li)) (cdr li)))
+
+
+;; move player pieces
+
+(define (move ip fp li)
+      (let (
+            [il (mcdr (massoc ip li))]
+            [fl (mcdr (massoc fp li))]
+            [ic (mcar (mcdr (mcdr (massoc ip li))))]
+            [fc (mcar (mcdr (mcdr (massoc fp li))))]
+            [fc2 (mcdr (mcdr (mlist-ref li (- fp 1))))]
+            [ic2 (mcdr (mcdr (mlist-ref li (- ip 1))))]
+            )
+        
+        (cond [(or (null? ip) (null? fp) (null? li)) (let ([x 0]) (set! x 0))]
+              [ (or (eq? fc 'undefined) (eq? fc ic)) (begin (if (eq? ic 'undefined)
+                                                                (let ([x 0]) (set! x 0))
+                                                                (begin (set-mcar! il (- (mcar il) 1))
+                                                                       (set-mcar! fl (+ (mcar fl) 1))))
+                                                            
+                                                            (if (eq? fc 'undefined)
+                                                                (if (eq? ic 'white) (set-mcar! fc2 'white)
+                                                                    (set-mcar! fc2 'black))
+                                                                (let ([x 0]) (set! x 0))))
+                                                            
+                                                            (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                                                            (if (= (mcar fl) 0) (set-mcar! fc2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                                                     ]
+              [else (begin (set-mcar! il (- (mcar il) 1))
+                           (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                               (let ([x 0]) (set! x 0)))
+                           
+                           (if (eq? fc 'white)
+                               (if  (= (mcar fl ) 1)
+                                    (begin (set! cpieces-white (+ 1 cpieces-white))
+                                           (set-mcar! fl  1)
+                                           (set-mcar! fc2 'black))                                    
+                                    (set-mcar! il (+ (mcar il) 1)))
+                               
+                               (if  (= (mcar fl ) 1)
+                                    (begin (set! cpieces-black (+ 1 cpieces-black))
+                                           (set-mcar! fl  1)
+                                           (set-mcar! fc2 'white))
+                                    (set-mcar! il (+ (mcar il) 1))))
+                               (if (= (mcar il) 0) (set-mcar! ic2 'undefined)
+                                                                (let ([x 0]) (set! x 0)))
+                               (if (= (mcar fl) 0) (set-mcar! fc2 'undefined)
+                                   (let ([x 0]) (set! x 0)))
+                               
+                                )])))
+
+;; move ai pieces
+
+(define (ai-move)
+    (let ((init  (cdr (best-move))))
+      (cond [(= sum-dice (+ (car dice) (cadr dice))) (begin (move (caddr init) (cadddr init) posn)
+                                                        (move (car init) (cadr init) posn))]
+            [(= sum-dice (cadr dice)) (move (car init) (cadr init) posn)]
+            [(= sum-dice (car dice)) (move (caddr init) (cadddr init) posn)])))
+ 
+
+(define main (new position%))
+
+
+
+
+
+;(draw-pieces posn)
+(send menu-frame show #t)
